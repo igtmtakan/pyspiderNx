@@ -22,3 +22,10 @@ psycopg2>=2.9.9
 elasticsearch>=8.12.1
 tblib>=3.0.0
 wsgidav>=4.3.0
+# API dependencies
+fastapi>=0.95.0
+uvicorn>=0.22.0
+pydantic>=1.10.0
+dicttoxml>=1.7.0
+PyYAML>=6.0.0
+python-multipart>=0.0.6

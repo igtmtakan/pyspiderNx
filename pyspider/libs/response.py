@@ -13,11 +13,21 @@ import json
 import chardet
 import lxml.html
 import lxml.etree
+import os
 from tblib import Traceback
 from pyquery import PyQuery
 from requests.structures import CaseInsensitiveDict
 from requests import HTTPError
 from pyspider.libs import utils
+from pyspider.libs.advanced_selector import AdvancedSelector
+from pyspider.libs.structured_data import StructuredDataExtractor
+from pyspider.libs.multimedia import MultimediaProcessor
+from pyspider.libs.json_selector import JsonSelector
+from pyspider.libs.css4_selector import CSS4Selector
+from pyspider.libs.graphql_selector import GraphQLSelector
+from pyspider.libs.xquery_selector import XQuerySelector
+from pyspider.libs.selector_pipeline import SelectorPipeline
+from pyspider.libs.selector_error_handler import SelectorErrorHandler
 
 
 class Response(object):
@@ -37,6 +47,17 @@ class Response(object):
         self.save = save
         self.js_script_result = js_script_result
         self.time = time
+
+        # Advanced selectors
+        self._advanced_selector = None
+        self._structured_data = None
+        self._multimedia = None
+        self._json_selector = None
+        self._css4_selector = None
+        self._graphql_selector = None
+        self._xquery_selector = None
+        self._selector_pipeline = None
+        self._selector_error_handler = None
 
     def __repr__(self):
         return u'<Response [%d]>' % self.status_code
@@ -210,6 +231,181 @@ class Response(object):
     @property
     def ok(self):
         return self.isok()
+
+    @property
+    def advanced(self):
+        """Returns an AdvancedSelector object for advanced data extraction"""
+        if self._advanced_selector is None:
+            self._advanced_selector = AdvancedSelector(response=self)
+        return self._advanced_selector
+
+    @property
+    def structured_data(self):
+        """Returns a StructuredDataExtractor object for extracting structured data"""
+        if self._structured_data is None:
+            self._structured_data = StructuredDataExtractor(response=self)
+        return self._structured_data
+
+    @property
+    def multimedia(self):
+        """Returns a MultimediaProcessor object for processing multimedia files"""
+        if self._multimedia is None:
+            self._multimedia = MultimediaProcessor(response=self)
+        return self._multimedia
+
+    @property
+    def json_selector(self):
+        """Returns a JsonSelector object for JSON data extraction"""
+        if self._json_selector is None:
+            self._json_selector = JsonSelector(response=self)
+        return self._json_selector
+
+    @property
+    def css4_selector(self):
+        """Returns a CSS4Selector object for advanced CSS selection"""
+        if self._css4_selector is None:
+            self._css4_selector = CSS4Selector(response=self)
+        return self._css4_selector
+
+    @property
+    def graphql_selector(self):
+        """Returns a GraphQLSelector object for GraphQL queries"""
+        if self._graphql_selector is None:
+            self._graphql_selector = GraphQLSelector(response=self)
+        return self._graphql_selector
+
+    @property
+    def xquery_selector(self):
+        """Returns an XQuerySelector object for XQuery queries"""
+        if self._xquery_selector is None:
+            self._xquery_selector = XQuerySelector(response=self)
+        return self._xquery_selector
+
+    @property
+    def selector_pipeline(self):
+        """Returns a SelectorPipeline object for combining selectors"""
+        if self._selector_pipeline is None:
+            self._selector_pipeline = SelectorPipeline(response=self)
+        return self._selector_pipeline
+
+    @property
+    def selector_error_handler(self):
+        """Returns a SelectorErrorHandler object for handling selector errors"""
+        if self._selector_error_handler is None:
+            self._selector_error_handler = SelectorErrorHandler(response=self)
+        return self._selector_error_handler
+
+    def xpath(self, xpath, default=None):
+        """Shortcut for advanced.xpath_first"""
+        return self.advanced.xpath_first(xpath, default)
+
+    def xpaths(self, xpath, default=None):
+        """Shortcut for advanced.xpath"""
+        return self.advanced.xpath(xpath, default)
+
+    def css(self, selector, attr=None, default=None):
+        """Shortcut for advanced.css_first"""
+        return self.advanced.css_first(selector, attr, default)
+
+    def csss(self, selector, attr=None, default=None):
+        """Shortcut for advanced.css"""
+        return self.advanced.css(selector, attr, default)
+
+    def regex(self, pattern, text=None, group=0, default=None):
+        """Shortcut for advanced.regex_first"""
+        return self.advanced.regex_first(pattern, text, group, default)
+
+    def regexs(self, pattern, text=None, group=0, default=None):
+        """Shortcut for advanced.regex"""
+        return self.advanced.regex(pattern, text, group, default)
+
+    def css4(self, selector, attr=None, default=None):
+        """Shortcut for advanced.css4_first"""
+        return self.advanced.css4_first(selector, attr, default)
+
+    def css4s(self, selector, attr=None, default=None):
+        """Shortcut for advanced.css4"""
+        return self.advanced.css4(selector, attr, default)
+
+    def jsonpath(self, path, default=None):
+        """Shortcut for advanced.jsonpath_first"""
+        return self.advanced.jsonpath_first(path, default)
+
+    def jsonpaths(self, path, default=None):
+        """Shortcut for advanced.jsonpath"""
+        return self.advanced.jsonpath(path, default)
+
+    def jmespath(self, path, default=None):
+        """Shortcut for advanced.jmespath"""
+        return self.advanced.jmespath(path, default)
+
+    def extract_table(self, table_selector, header_selector=None, row_selector='tr', cell_selector='td,th'):
+        """Shortcut for advanced.extract_table"""
+        return self.advanced.extract_table(table_selector, header_selector, row_selector, cell_selector)
+
+    def extract_list(self, list_selector, item_selector, attr=None):
+        """Shortcut for advanced.extract_list"""
+        return self.advanced.extract_list(list_selector, item_selector, attr)
+
+    def graphql(self, query, variables=None, path=None, default=None):
+        """Shortcut for graphql_selector.query"""
+        return self.graphql_selector.query(query, variables, path, default)
+
+    def graphql_subscribe(self, query, variables=None, callback=None):
+        """Shortcut for graphql_selector.subscribe"""
+        return self.graphql_selector.subscribe(query, variables, callback)
+
+    def graphql_unsubscribe(self, subscription_id):
+        """Shortcut for graphql_selector.unsubscribe"""
+        return self.graphql_selector.unsubscribe(subscription_id)
+
+    def xquery(self, query, namespaces=None, default=None):
+        """Shortcut for xquery_selector.xquery"""
+        return self.xquery_selector.xquery(query, namespaces, default)
+
+    def xquery31(self, query, namespaces=None, default=None):
+        """Shortcut for xquery_selector.xquery31"""
+        return self.xquery_selector.xquery31(query, namespaces, default)
+
+    def execute_flwor(self, query, namespaces=None, default=None):
+        """Shortcut for xquery_selector.execute_flwor"""
+        return self.xquery_selector.execute_flwor(query, namespaces, default)
+
+    def pipeline(self, selectors, transformers=None, combiner='first'):
+        """Shortcut for selector_pipeline.extract"""
+        return self.selector_pipeline.extract(selectors, transformers, combiner)
+
+    def extract_with_fallbacks(self, selectors, transformers=None):
+        """Shortcut for selector_pipeline.extract_with_fallbacks"""
+        return self.selector_pipeline.extract_with_fallbacks(selectors, transformers)
+
+    def extract_multiple(self, config):
+        """Shortcut for selector_pipeline.extract_multiple"""
+        return self.selector_pipeline.extract_multiple(config)
+
+    def extract_table_advanced(self, config):
+        """Shortcut for selector_pipeline.extract_table"""
+        return self.selector_pipeline.extract_table(config)
+
+    def extract_list_advanced(self, config):
+        """Shortcut for selector_pipeline.extract_list"""
+        return self.selector_pipeline.extract_list(config)
+
+    def load_transformer_module(self, module_path):
+        """Shortcut for selector_pipeline.load_transformer_module"""
+        return self.selector_pipeline.load_transformer_module(module_path)
+
+    def register_transformer(self, name, func):
+        """Shortcut for selector_pipeline.register_transformer"""
+        return self.selector_pipeline.register_transformer(name, func)
+
+    def create_pipeline(self, steps):
+        """Shortcut for selector_pipeline.create_pipeline"""
+        return self.selector_pipeline.create_pipeline(steps)
+
+    def execute_pipeline(self, pipeline_config, input_data=None):
+        """Shortcut for selector_pipeline.execute_pipeline"""
+        return self.selector_pipeline.execute_pipeline(pipeline_config, input_data)
 
 
 def rebuild_response(r):

@@ -1,9 +1,13 @@
 import asyncio
 import json
 import time
-from typing import Dict, Any, Optional
+import os
+from typing import Dict, Any, Optional, List, Union
 from playwright.async_api import async_playwright, Browser, Page, Response
 import logging
+from fastapi import HTTPException
+
+from pyspider.fetcher.playwright_actions import PlaywrightActions
 
 logger = logging.getLogger('fetcher')
 
@@ -11,6 +15,7 @@ class PyPlaywrightFetcher:
     def __init__(self):
         self.browser: Optional[Browser] = None
         self.playwright = None
+        self.actions = None
 
     async def init(self):
         """Initialize playwright and browser"""
@@ -37,7 +42,7 @@ class PyPlaywrightFetcher:
     async def fetch(self, task: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch a URL using playwright"""
         start_time = time.time()
-        
+
         try:
             await self.init()
             context = await self.browser.new_context(
@@ -57,9 +62,12 @@ class PyPlaywrightFetcher:
 
             # Handle image loading
             if task.get('load_images') == "false":
-                await page.route("**/*", lambda route: route.abort() 
-                    if route.request.resource_type == "image" 
+                await page.route("**/*", lambda route: route.abort()
+                    if route.request.resource_type == "image"
                     else route.continue_())
+
+            # Initialize actions
+            self.actions = PlaywrightActions(page)
 
             # Navigate to page
             response: Response = await page.goto(
@@ -67,6 +75,28 @@ class PyPlaywrightFetcher:
                 timeout=task.get('timeout', 20) * 1000,
                 wait_until='networkidle'
             )
+
+            # Perform actions if specified
+            actions_result = None
+            if task.get('actions'):
+                logger.info('Performing actions')
+                actions_result = await self.actions.perform_actions(task['actions'])
+
+            # Record actions if requested
+            if task.get('record_actions'):
+                logger.info('Recording actions')
+                await self.actions.start_recording()
+
+                # Wait for recording timeout
+                record_timeout = task.get('record_timeout', 60) * 1000
+                await page.wait_for_timeout(record_timeout)
+
+                # Stop recording and get actions
+                actions_result = await self.actions.stop_recording()
+
+                # Save recorded actions if path is provided
+                if task.get('record_actions_path'):
+                    self.actions.save_recorded_actions(task['record_actions_path'])
 
             # Execute custom JavaScript
             script_result = None
@@ -95,6 +125,7 @@ class PyPlaywrightFetcher:
                 'cookies': cookies,
                 'time': time.time() - start_time,
                 'js_script_result': script_result,
+                'actions_result': actions_result,
                 'save': task.get('save')
             }
 
@@ -125,7 +156,7 @@ async def create_fetcher():
 if __name__ == "__main__":
     import uvicorn
     from fastapi import FastAPI, HTTPException
-    
+
     app = FastAPI()
     fetcher: Optional[PyPlaywrightFetcher] = None
 
@@ -144,5 +175,42 @@ if __name__ == "__main__":
         if not fetcher:
             raise HTTPException(status_code=500, detail="Fetcher not initialized")
         return await fetcher.fetch(task)
+
+    @app.post("/perform_actions")
+    async def perform_actions(request: Dict[str, Any]):
+        if not fetcher:
+            raise HTTPException(status_code=500, detail="Fetcher not initialized")
+
+        task = {
+            'url': request.get('url', ''),
+            'actions': request.get('actions', []),
+            'timeout': request.get('timeout', 20)
+        }
+
+        result = await fetcher.fetch(task)
+        return {
+            'success': result.get('status_code') < 400,
+            'actions_result': result.get('actions_result'),
+            'url': result.get('url')
+        }
+
+    @app.post("/record_actions")
+    async def record_actions(request: Dict[str, Any]):
+        if not fetcher:
+            raise HTTPException(status_code=500, detail="Fetcher not initialized")
+
+        task = {
+            'url': request.get('url', ''),
+            'record_actions': True,
+            'record_timeout': request.get('record_timeout', 60),
+            'record_actions_path': request.get('save_path')
+        }
+
+        result = await fetcher.fetch(task)
+        return {
+            'success': result.get('status_code') < 400,
+            'actions': result.get('actions_result'),
+            'url': result.get('url')
+        }
 
     uvicorn.run(app, host="0.0.0.0", port=22223)

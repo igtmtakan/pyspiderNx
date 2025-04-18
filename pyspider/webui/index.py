@@ -6,10 +6,12 @@
 # Created on 2014-02-22 23:20:39
 
 import socket
+import time
 
 from six import iteritems, itervalues
 from flask import render_template, request, json, jsonify
 from pyspider.libs.log_utils import success_log, error_log, info_log
+from pyspider.libs.time_series_store import time_series_store
 
 try:
     import flask_login as login
@@ -27,6 +29,14 @@ def index():
     projects = sorted(projectdb.get_all(fields=index_fields),
                       key=lambda k: (0 if k['group'] else 1, k['group'] or '', k['name']))
     return render_template("index.html", projects=projects)
+
+
+@app.route('/dashboard')
+def dashboard():
+    projectdb = app.config['projectdb']
+    projects = sorted(projectdb.get_all(fields=['name']),
+                      key=lambda k: k['name'])
+    return render_template("dashboard.html", projects=projects)
 
 
 @app.route('/queues')
@@ -362,6 +372,32 @@ def get_avg_time():
                 }
 
         app.logger.debug('Avg time API result: %s', result)
+
+        # Store time series data
+        current_time = time.time()
+        for project_name, project_data in result.items():
+            # Store success rate
+            task_counts = project_data.get('task_counts', {})
+            total_tasks = task_counts.get('total', 0) + task_counts.get('success', 0) + task_counts.get('failed', 0) + task_counts.get('pending', 0)
+            success_tasks = task_counts.get('success', 0)
+            success_rate = (success_tasks / total_tasks * 100) if total_tasks > 0 else 0
+            time_series_store.add_data_point(project_name, 'success_rate', success_rate)
+
+            # Store process time
+            process_time = project_data.get('process_time', 0)
+            time_series_store.add_data_point(project_name, 'process_time', process_time)
+
+            # Store fetch time
+            fetch_time = project_data.get('fetch_time', 0)
+            time_series_store.add_data_point(project_name, 'fetch_time', fetch_time)
+
+            # Store total time
+            total_time = project_data.get('total_time', 0)
+            time_series_store.add_data_point(project_name, 'total_time', total_time)
+
+            # Store remaining time
+            remaining_time = project_data.get('remaining_time', 0)
+            time_series_store.add_data_point(project_name, 'remaining_time', remaining_time)
     except socket.error as e:
         app.logger.warning('connect to scheduler rpc error: %r', e)
         return json.dumps({}), 200, {'Content-Type': 'application/json'}
@@ -378,5 +414,11 @@ def robots():
 Disallow: /
 Allow: /$
 Allow: /debug
+Allow: /selector_tester
 Disallow: /debug/*?taskid=*
 """, 200, {'Content-Type': 'text/plain'}
+
+
+@app.route('/selector_tester')
+def selector_tester_page():
+    return render_template("selector_tester.html")
