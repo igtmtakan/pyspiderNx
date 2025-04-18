@@ -1,0 +1,5 @@
+{
+    "phantomjs": {
+        "args": ["--ignore-ssl-errors=true"]
+    }
+}
