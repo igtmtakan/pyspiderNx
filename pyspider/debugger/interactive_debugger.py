@@ -29,7 +29,7 @@ class BreakpointInfo:
         self.condition = condition
         self.enabled = enabled
         self.hits = 0
-        
+
     def __str__(self) -> str:
         status = "enabled" if self.enabled else "disabled"
         condition = f" if {self.condition}" if self.condition else ""
@@ -45,7 +45,7 @@ class DebuggerState:
 
 class InteractiveDebugger(Bdb):
     """Interactive debugger for PySpider"""
-    
+
     def __init__(self):
         super().__init__()
         self.breakpoints: Dict[str, Dict[int, BreakpointInfo]] = {}
@@ -66,39 +66,39 @@ class InteractiveDebugger(Bdb):
         }
         self.lock = threading.RLock()
         self._callback = None
-        
+
     def start(self, callback: Optional[Callable] = None):
         """Start the debugger"""
         with self.lock:
             if self.state != DebuggerState.STOPPED:
                 return False
-            
+
             self.state = DebuggerState.RUNNING
             self._callback = callback
             return True
-    
+
     def stop(self):
         """Stop the debugger"""
         with self.lock:
             if self.state == DebuggerState.STOPPED:
                 return False
-            
+
             self.state = DebuggerState.STOPPED
             self.clear_all_breaks()
             self._callback = None
             return True
-    
+
     def set_break(self, filename: str, lineno: int, condition: Optional[str] = None) -> Optional[BreakpointInfo]:
         """Set a breakpoint"""
         with self.lock:
             # Normalize filename
             filename = os.path.abspath(filename)
-            
+
             # Check if file exists
             if not os.path.isfile(filename):
                 logger.error(f"File not found: {filename}")
                 return None
-            
+
             # Check if line is valid
             try:
                 with open(filename, 'r') as f:
@@ -109,85 +109,85 @@ class InteractiveDebugger(Bdb):
             except Exception as e:
                 logger.error(f"Error reading file: {e}")
                 return None
-            
+
             # Set breakpoint
             if filename not in self.breakpoints:
                 self.breakpoints[filename] = {}
-            
+
             bp_info = BreakpointInfo(filename, lineno, condition)
             self.breakpoints[filename][lineno] = bp_info
-            
+
             # Set breakpoint in bdb
             super().set_break(filename, lineno, condition)
-            
+
             logger.info(f"Breakpoint set at {filename}:{lineno}")
             return bp_info
-    
+
     def clear_break(self, filename: str, lineno: int) -> bool:
         """Clear a breakpoint"""
         with self.lock:
             # Normalize filename
             filename = os.path.abspath(filename)
-            
+
             # Check if breakpoint exists
             if filename not in self.breakpoints or lineno not in self.breakpoints[filename]:
                 logger.error(f"No breakpoint at {filename}:{lineno}")
                 return False
-            
+
             # Clear breakpoint
             del self.breakpoints[filename][lineno]
             if not self.breakpoints[filename]:
                 del self.breakpoints[filename]
-            
+
             # Clear breakpoint in bdb
             super().clear_break(filename, lineno)
-            
+
             logger.info(f"Breakpoint cleared at {filename}:{lineno}")
             return True
-    
+
     def enable_break(self, filename: str, lineno: int) -> bool:
         """Enable a breakpoint"""
         with self.lock:
             # Normalize filename
             filename = os.path.abspath(filename)
-            
+
             # Check if breakpoint exists
             if filename not in self.breakpoints or lineno not in self.breakpoints[filename]:
                 logger.error(f"No breakpoint at {filename}:{lineno}")
                 return False
-            
+
             # Enable breakpoint
             bp_info = self.breakpoints[filename][lineno]
             bp_info.enabled = True
-            
+
             # Enable breakpoint in bdb
             super().clear_break(filename, lineno)
             super().set_break(filename, lineno, bp_info.condition)
-            
+
             logger.info(f"Breakpoint enabled at {filename}:{lineno}")
             return True
-    
+
     def disable_break(self, filename: str, lineno: int) -> bool:
         """Disable a breakpoint"""
         with self.lock:
             # Normalize filename
             filename = os.path.abspath(filename)
-            
+
             # Check if breakpoint exists
             if filename not in self.breakpoints or lineno not in self.breakpoints[filename]:
                 logger.error(f"No breakpoint at {filename}:{lineno}")
                 return False
-            
+
             # Disable breakpoint
             bp_info = self.breakpoints[filename][lineno]
             bp_info.enabled = False
-            
+
             # Disable breakpoint in bdb
             super().clear_break(filename, lineno)
-            
+
             logger.info(f"Breakpoint disabled at {filename}:{lineno}")
             return True
-    
+
     def clear_all_breaks(self) -> bool:
         """Clear all breakpoints"""
         with self.lock:
@@ -195,7 +195,7 @@ class InteractiveDebugger(Bdb):
             super().clear_all_breaks()
             logger.info("All breakpoints cleared")
             return True
-    
+
     def get_all_breaks(self) -> List[BreakpointInfo]:
         """Get all breakpoints"""
         with self.lock:
@@ -204,70 +204,70 @@ class InteractiveDebugger(Bdb):
                 for lineno, bp_info in breaks.items():
                     result.append(bp_info)
             return result
-    
+
     def get_break(self, filename: str, lineno: int) -> Optional[BreakpointInfo]:
         """Get breakpoint information"""
         with self.lock:
             # Normalize filename
             filename = os.path.abspath(filename)
-            
+
             # Check if breakpoint exists
             if filename not in self.breakpoints or lineno not in self.breakpoints[filename]:
                 return None
-            
+
             return self.breakpoints[filename][lineno]
-    
+
     def step_into(self):
         """Step into the next line"""
         with self.lock:
             if self.state != DebuggerState.PAUSED:
                 return False
-            
+
             self.state = DebuggerState.STEPPING
             self.set_step()
             return True
-    
+
     def step_over(self):
         """Step over the next line"""
         with self.lock:
             if self.state != DebuggerState.PAUSED:
                 return False
-            
+
             self.state = DebuggerState.STEPPING
             self.set_next(self.current_frame)
             return True
-    
+
     def step_out(self):
         """Step out of the current function"""
         with self.lock:
             if self.state != DebuggerState.PAUSED:
                 return False
-            
+
             self.state = DebuggerState.STEPPING
             self.set_return(self.current_frame)
             return True
-    
+
     def continue_execution(self):
         """Continue execution"""
         with self.lock:
             if self.state != DebuggerState.PAUSED:
                 return False
-            
+
             self.state = DebuggerState.RUNNING
             self.set_continue()
             return True
-    
+
     def get_current_frame_info(self) -> Dict[str, Any]:
         """Get current frame information"""
         with self.lock:
             if self.state != DebuggerState.PAUSED or not self.current_frame:
                 return {}
-            
+
             frame = self.current_frame
             filename = frame.f_code.co_filename
             lineno = frame.f_lineno
             function = frame.f_code.co_name
-            
+
             # Get source code
             source_lines = []
             source_line = ""
@@ -278,7 +278,7 @@ class InteractiveDebugger(Bdb):
                         source_line = source_lines[lineno - 1].rstrip()
             except Exception as e:
                 logger.error(f"Error reading source: {e}")
-            
+
             # Get context (5 lines before and after)
             context_start = max(0, lineno - 6)
             context_end = min(len(source_lines), lineno + 5)
@@ -289,7 +289,7 @@ class InteractiveDebugger(Bdb):
                     'content': source_lines[i].rstrip() if i < len(source_lines) else "",
                     'current': i + 1 == lineno
                 })
-            
+
             # Get local variables
             locals_dict = {}
             for name, value in frame.f_locals.items():
@@ -302,7 +302,7 @@ class InteractiveDebugger(Bdb):
                     locals_dict[name] = str_value
                 except Exception as e:
                     locals_dict[name] = f"<Error: {e}>"
-            
+
             # Get global variables
             globals_dict = {}
             for name, value in frame.f_globals.items():
@@ -318,7 +318,7 @@ class InteractiveDebugger(Bdb):
                     globals_dict[name] = str_value
                 except Exception as e:
                     globals_dict[name] = f"<Error: {e}>"
-            
+
             # Get call stack
             stack = []
             frame_temp = frame
@@ -329,11 +329,11 @@ class InteractiveDebugger(Bdb):
                     'function': frame_temp.f_code.co_name
                 })
                 frame_temp = frame_temp.f_back
-            
+
             # Get output
             output = self.output_buffer.getvalue()
             error = self.error_buffer.getvalue()
-            
+
             return {
                 'filename': filename,
                 'lineno': lineno,
@@ -346,23 +346,23 @@ class InteractiveDebugger(Bdb):
                 'output': output,
                 'error': error
             }
-    
+
     def evaluate_expression(self, expression: str) -> Dict[str, Any]:
         """Evaluate an expression in the current frame"""
         with self.lock:
             if self.state != DebuggerState.PAUSED or not self.current_frame:
                 return {'success': False, 'error': 'Debugger not paused'}
-            
+
             try:
                 # Evaluate expression
                 result = eval(expression, self.current_frame.f_globals, self.current_frame.f_locals)
-                
+
                 # Convert result to string representation
                 str_result = repr(result)
                 # Truncate long results
                 if len(str_result) > 10000:
                     str_result = str_result[:10000] + "..."
-                
+
                 return {
                     'success': True,
                     'result': str_result,
@@ -374,17 +374,17 @@ class InteractiveDebugger(Bdb):
                     'error': str(e),
                     'traceback': traceback.format_exc()
                 }
-    
+
     def execute_statement(self, statement: str) -> Dict[str, Any]:
         """Execute a statement in the current frame"""
         with self.lock:
             if self.state != DebuggerState.PAUSED or not self.current_frame:
                 return {'success': False, 'error': 'Debugger not paused'}
-            
+
             try:
                 # Execute statement
                 exec(statement, self.current_frame.f_globals, self.current_frame.f_locals)
-                
+
                 return {
                     'success': True
                 }
@@ -394,7 +394,7 @@ class InteractiveDebugger(Bdb):
                     'error': str(e),
                     'traceback': traceback.format_exc()
                 }
-    
+
     def start_capture(self):
         """Start capturing stdout and stderr"""
         self.output_buffer = StringIO()
@@ -403,40 +403,40 @@ class InteractiveDebugger(Bdb):
         self.original_stderr = sys.stderr
         sys.stdout = self.output_buffer
         sys.stderr = self.error_buffer
-    
+
     def stop_capture(self):
         """Stop capturing stdout and stderr"""
         if self.original_stdout:
             sys.stdout = self.original_stdout
             self.original_stdout = None
-        
+
         if self.original_stderr:
             sys.stderr = self.original_stderr
             self.original_stderr = None
-    
+
     def debug_script(self, script: str, globals_dict: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Debug a script"""
         with self.lock:
             if self.state != DebuggerState.RUNNING:
                 return {'success': False, 'error': 'Debugger not running'}
-            
+
             # Create globals dictionary
             if globals_dict is None:
                 globals_dict = {}
-            
+
             # Add builtins
             globals_dict['__builtins__'] = __builtins__
-            
+
             try:
                 # Start capturing stdout and stderr
                 self.start_capture()
-                
+
                 # Run script
                 self.run(script, globals_dict)
-                
+
                 # Stop capturing stdout and stderr
                 self.stop_capture()
-                
+
                 return {
                     'success': True,
                     'output': self.output_buffer.getvalue(),
@@ -445,7 +445,7 @@ class InteractiveDebugger(Bdb):
             except BdbQuit:
                 # Stop capturing stdout and stderr
                 self.stop_capture()
-                
+
                 return {
                     'success': True,
                     'output': self.output_buffer.getvalue(),
@@ -454,7 +454,7 @@ class InteractiveDebugger(Bdb):
             except Exception as e:
                 # Stop capturing stdout and stderr
                 self.stop_capture()
-                
+
                 return {
                     'success': False,
                     'error': str(e),
@@ -462,29 +462,29 @@ class InteractiveDebugger(Bdb):
                     'output': self.output_buffer.getvalue(),
                     'error_output': self.error_buffer.getvalue()
                 }
-    
+
     def debug_function(self, func: Callable, args: List[Any] = None, kwargs: Dict[str, Any] = None) -> Dict[str, Any]:
         """Debug a function"""
         with self.lock:
             if self.state != DebuggerState.RUNNING:
                 return {'success': False, 'error': 'Debugger not running'}
-            
+
             if args is None:
                 args = []
-            
+
             if kwargs is None:
                 kwargs = {}
-            
+
             try:
                 # Start capturing stdout and stderr
                 self.start_capture()
-                
+
                 # Run function
                 result = self.runcall(func, *args, **kwargs)
-                
+
                 # Stop capturing stdout and stderr
                 self.stop_capture()
-                
+
                 return {
                     'success': True,
                     'result': result,
@@ -494,7 +494,7 @@ class InteractiveDebugger(Bdb):
             except BdbQuit:
                 # Stop capturing stdout and stderr
                 self.stop_capture()
-                
+
                 return {
                     'success': True,
                     'output': self.output_buffer.getvalue(),
@@ -503,7 +503,7 @@ class InteractiveDebugger(Bdb):
             except Exception as e:
                 # Stop capturing stdout and stderr
                 self.stop_capture()
-                
+
                 return {
                     'success': False,
                     'error': str(e),
@@ -511,14 +511,14 @@ class InteractiveDebugger(Bdb):
                     'output': self.output_buffer.getvalue(),
                     'error_output': self.error_buffer.getvalue()
                 }
-    
+
     def user_line(self, frame):
         """Called when the debugger stops at a line"""
         with self.lock:
             # Check if we should stop at this line
             filename = frame.f_code.co_filename
             lineno = frame.f_lineno
-            
+
             # Check if this is a breakpoint
             is_breakpoint = False
             if filename in self.breakpoints and lineno in self.breakpoints[filename]:
@@ -526,14 +526,14 @@ class InteractiveDebugger(Bdb):
                 if bp_info.enabled:
                     bp_info.hits += 1
                     is_breakpoint = True
-            
+
             # Update state
             self.state = DebuggerState.PAUSED
             self.current_frame = frame
-            
+
             # Get frame information
             self.current_frame_info = self.get_current_frame_info()
-            
+
             # Call callback
             if self._callback:
                 self._callback({
@@ -541,24 +541,24 @@ class InteractiveDebugger(Bdb):
                     'reason': 'breakpoint' if is_breakpoint else 'step',
                     'frame_info': self.current_frame_info
                 })
-            
+
             # Wait for user command
             self.wait_for_user_command()
-    
+
     def user_return(self, frame, return_value):
         """Called when a function returns"""
         pass
-    
+
     def user_exception(self, frame, exc_info):
         """Called when an exception occurs"""
         with self.lock:
             # Update state
             self.state = DebuggerState.PAUSED
             self.current_frame = frame
-            
+
             # Get frame information
             self.current_frame_info = self.get_current_frame_info()
-            
+
             # Get exception information
             exc_type, exc_value, exc_traceback = exc_info
             exception_info = {
@@ -566,7 +566,7 @@ class InteractiveDebugger(Bdb):
                 'message': str(exc_value),
                 'traceback': traceback.format_tb(exc_traceback)
             }
-            
+
             # Call callback
             if self._callback:
                 self._callback({
@@ -575,17 +575,214 @@ class InteractiveDebugger(Bdb):
                     'frame_info': self.current_frame_info,
                     'exception': exception_info
                 })
-            
+
             # Wait for user command
             self.wait_for_user_command()
-    
+
     def wait_for_user_command(self):
         """Wait for user command"""
-        # This method is a placeholder
-        # In a real implementation, this would wait for commands from the UI
-        # For now, we'll just continue execution
-        self.continue_execution()
-    
+        # This method is a placeholder for synchronous debugging
+        # In our web-based implementation, we'll use the callback mechanism
+        # to communicate with the UI and wait for user commands asynchronously
+        # The UI will call the appropriate step_* methods when the user interacts with it
+        pass
+
     def set_callback(self, callback: Callable):
         """Set callback function"""
         self._callback = callback
+
+    def get_variable_value(self, name: str) -> Dict[str, Any]:
+        """Get the value of a variable in the current frame"""
+        with self.lock:
+            if self.state != DebuggerState.PAUSED or not self.current_frame:
+                return {'success': False, 'error': 'Debugger not paused'}
+
+            try:
+                # Check if variable exists in locals
+                if name in self.current_frame.f_locals:
+                    value = self.current_frame.f_locals[name]
+                    return {
+                        'success': True,
+                        'value': repr(value),
+                        'type': type(value).__name__,
+                        'scope': 'local'
+                    }
+
+                # Check if variable exists in globals
+                if name in self.current_frame.f_globals:
+                    value = self.current_frame.f_globals[name]
+                    return {
+                        'success': True,
+                        'value': repr(value),
+                        'type': type(value).__name__,
+                        'scope': 'global'
+                    }
+
+                return {'success': False, 'error': f'Variable {name} not found'}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+    def set_variable_value(self, name: str, value_str: str) -> Dict[str, Any]:
+        """Set the value of a variable in the current frame"""
+        with self.lock:
+            if self.state != DebuggerState.PAUSED or not self.current_frame:
+                return {'success': False, 'error': 'Debugger not paused'}
+
+            try:
+                # Evaluate value string
+                value = eval(value_str, self.current_frame.f_globals, self.current_frame.f_locals)
+
+                # Check if variable exists in locals
+                if name in self.current_frame.f_locals:
+                    self.current_frame.f_locals[name] = value
+                    return {'success': True, 'scope': 'local'}
+
+                # Check if variable exists in globals
+                if name in self.current_frame.f_globals:
+                    self.current_frame.f_globals[name] = value
+                    return {'success': True, 'scope': 'global'}
+
+                # Variable doesn't exist, create it in locals
+                self.current_frame.f_locals[name] = value
+                return {'success': True, 'scope': 'local'}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+
+    def get_watch_expression_value(self, expression: str) -> Dict[str, Any]:
+        """Evaluate a watch expression in the current frame"""
+        with self.lock:
+            if self.state != DebuggerState.PAUSED or not self.current_frame:
+                return {'success': False, 'error': 'Debugger not paused'}
+
+            try:
+                # Evaluate expression
+                value = eval(expression, self.current_frame.f_globals, self.current_frame.f_locals)
+
+                return {
+                    'success': True,
+                    'expression': expression,
+                    'value': repr(value),
+                    'type': type(value).__name__
+                }
+            except Exception as e:
+                return {
+                    'success': False,
+                    'expression': expression,
+                    'error': str(e)
+                }
+
+    def get_source_file(self, filename: str) -> Dict[str, Any]:
+        """Get the source code of a file"""
+        try:
+            # Normalize filename
+            filename = os.path.abspath(filename)
+
+            # Check if file exists
+            if not os.path.isfile(filename):
+                return {'success': False, 'error': f'File not found: {filename}'}
+
+            # Read file
+            with open(filename, 'r') as f:
+                source = f.read()
+                lines = source.splitlines()
+
+            return {
+                'success': True,
+                'filename': filename,
+                'source': source,
+                'lines': lines,
+                'line_count': len(lines)
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    def set_conditional_breakpoint(self, filename: str, lineno: int, condition: str) -> Optional[BreakpointInfo]:
+        """Set a conditional breakpoint"""
+        return self.set_break(filename, lineno, condition)
+
+    def get_breakpoint_hit_count(self, filename: str, lineno: int) -> int:
+        """Get the hit count of a breakpoint"""
+        with self.lock:
+            # Normalize filename
+            filename = os.path.abspath(filename)
+
+            # Check if breakpoint exists
+            if filename not in self.breakpoints or lineno not in self.breakpoints[filename]:
+                return 0
+
+            return self.breakpoints[filename][lineno].hits
+
+    def reset_breakpoint_hit_count(self, filename: str, lineno: int) -> bool:
+        """Reset the hit count of a breakpoint"""
+        with self.lock:
+            # Normalize filename
+            filename = os.path.abspath(filename)
+
+            # Check if breakpoint exists
+            if filename not in self.breakpoints or lineno not in self.breakpoints[filename]:
+                return False
+
+            self.breakpoints[filename][lineno].hits = 0
+            return True
+
+    def get_call_stack(self) -> List[Dict[str, Any]]:
+        """Get the current call stack"""
+        with self.lock:
+            if self.state != DebuggerState.PAUSED or not self.current_frame:
+                return []
+
+            stack = []
+            frame_temp = self.current_frame
+            while frame_temp:
+                stack.append({
+                    'filename': frame_temp.f_code.co_filename,
+                    'lineno': frame_temp.f_lineno,
+                    'function': frame_temp.f_code.co_name
+                })
+                frame_temp = frame_temp.f_back
+
+            return stack
+
+    def jump_to_frame(self, frame_index: int) -> Dict[str, Any]:
+        """Jump to a specific frame in the call stack"""
+        with self.lock:
+            if self.state != DebuggerState.PAUSED or not self.current_frame:
+                return {'success': False, 'error': 'Debugger not paused'}
+
+            # Get call stack
+            stack = self.get_call_stack()
+
+            # Check if frame index is valid
+            if frame_index < 0 or frame_index >= len(stack):
+                return {'success': False, 'error': f'Invalid frame index: {frame_index}'}
+
+            # Get frame
+            frame_temp = self.current_frame
+            for _ in range(frame_index):
+                if not frame_temp.f_back:
+                    break
+                frame_temp = frame_temp.f_back
+
+            # Update current frame
+            self.current_frame = frame_temp
+
+            # Get frame information
+            self.current_frame_info = self.get_current_frame_info()
+
+            return {
+                'success': True,
+                'frame_info': self.current_frame_info
+            }
+
+    def get_output(self) -> Dict[str, str]:
+        """Get captured output"""
+        return {
+            'stdout': self.output_buffer.getvalue(),
+            'stderr': self.error_buffer.getvalue()
+        }
+
+    def clear_output(self) -> bool:
+        """Clear captured output"""
+        self.output_buffer = StringIO()
+        self.error_buffer = StringIO()
+        return True
