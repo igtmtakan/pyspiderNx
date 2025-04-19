@@ -1,0 +1,184 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// PySpider data models
+
+model Project {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  status      ProjectStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  tasks       Task[]
+  schedules   Schedule[]
+  settings    Json?
+}
+
+model Task {
+  id          String     @id @default(uuid())
+  name        String
+  description String?
+  status      TaskStatus @default(PENDING)
+  priority    Priority   @default(MEDIUM)
+  progress    Float      @default(0)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  projectId   String
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentId    String?
+  parent      Task?      @relation("TaskDependency", fields: [parentId], references: [id])
+  children    Task[]     @relation("TaskDependency")
+  logs        TaskLog[]
+  scheduleId  String?
+  schedule    Schedule?  @relation(fields: [scheduleId], references: [id])
+}
+
+model TaskLog {
+  id        String   @id @default(uuid())
+  message   String
+  level     LogLevel @default(INFO)
+  createdAt DateTime @default(now())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model Schedule {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  cron        String?
+  active      Boolean   @default(true)
+  nextRun     DateTime?
+  lastRun     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+}
+
+model DebugSession {
+  id         String        @id @default(uuid())
+  type       DebugType
+  status     DebugStatus   @default(STOPPED)
+  startedAt  DateTime      @default(now())
+  endedAt    DateTime?
+  data       Json?
+  requests   Request[]
+  responses  Response[]
+  projectId  String?
+  project    DebugProject? @relation(fields: [projectId], references: [id])
+  debugTasks DebugTask[]
+}
+
+model DebugProject {
+  id        String          @id @default(uuid())
+  name      String          @unique
+  script    String          @default("")
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  sessions  DebugSession[]
+  history   ScriptHistory[]
+}
+
+model ScriptHistory {
+  id        String       @id @default(uuid())
+  content   String
+  createdAt DateTime     @default(now())
+  projectId String
+  project   DebugProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model DebugTask {
+  id        String       @id @default(uuid())
+  taskId    String
+  project   String
+  url       String
+  process   Json
+  sessionId String
+  session   DebugSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model Request {
+  id             String       @id @default(uuid())
+  url            String
+  method         String
+  headers        Json?
+  body           String?
+  timestamp      DateTime     @default(now())
+  debugSessionId String
+  debugSession   DebugSession @relation(fields: [debugSessionId], references: [id], onDelete: Cascade)
+  response       Response?
+}
+
+model Response {
+  id             String       @id @default(uuid())
+  statusCode     Int
+  headers        Json?
+  body           String?
+  timestamp      DateTime     @default(now())
+  requestId      String       @unique
+  request        Request      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  debugSessionId String
+  debugSession   DebugSession @relation(fields: [debugSessionId], references: [id], onDelete: Cascade)
+}
+
+// Enums
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+  COMPLETED
+}
+
+enum TaskStatus {
+  PENDING
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum DebugType {
+  DEBUGGER
+  INSPECTOR
+  PROFILER
+}
+
+enum DebugStatus {
+  RUNNING
+  PAUSED
+  STOPPED
+}
