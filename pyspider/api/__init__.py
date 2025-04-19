@@ -20,7 +20,8 @@ def init_api():
     import pyspider.api.swagger
     import pyspider.api.batch
     import pyspider.api.websocket
-    
+    import pyspider.api.time_series
+
     # Initialize error handlers
     pyspider.api.errors.init_error_handlers()
 

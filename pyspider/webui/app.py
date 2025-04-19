@@ -83,6 +83,23 @@ app.secret_key = os.urandom(24)
 app.jinja_env.line_statement_prefix = '#'
 app.jinja_env.globals.update(builtins.__dict__)
 
+# Mount FastAPI for API endpoints
+try:
+    from pyspider.webui.api import create_app as create_api_app
+    from fastapi.middleware.wsgi import WSGIMiddleware
+    import uvicorn
+
+    # Create FastAPI app
+    api_app = create_api_app()
+
+    # Mount FastAPI app at /api
+    app.wsgi_app = WSGIMiddleware(api_app, wsgi_app=app.wsgi_app)
+
+    logger.info("FastAPI mounted at /api")
+except ImportError as e:
+    logger.warning(f"Failed to mount FastAPI: {e}")
+    logger.warning("API endpoints will not be available")
+
 app.config.update({
     'fetch': lambda x: tornado_fetcher.Fetcher(None, None, async_mode=False).fetch(x),
     'taskdb': None,

@@ -3,6 +3,10 @@
 # vim: set et sw=4 ts=4 sts=4 ff=unix fenc=utf8:
 # Author: Binux<i@binux.me>
 #         http://binux.me
-# Created on 2014-02-22 23:20:40
+# Created on 2024-04-29 10:00:00
 
-from . import app, index, debug, task, result, login, products, selector_tester, time_series, sample_data
+"""
+PySpider API module
+"""
+
+from .app import create_app
